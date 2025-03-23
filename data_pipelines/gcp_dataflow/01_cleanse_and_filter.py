@@ -4,7 +4,7 @@
 
 import apache_beam as beam
 from apache_beam.options.pipeline_options import PipelineOptions
-from apache_beam.io.gcp.pubsub import ReadFromPubSub, DeadLetterPolicy
+from apache_beam.io.gcp.pubsub import ReadFromPubSub
 import pyarrow.parquet as pq
 import pyarrow as pa
 import json
@@ -89,17 +89,16 @@ class UploadToGCS(beam.DoFn):
 
 def run():
     ## Declare GCP service variables, define pipeline options, and run the pipeline
-    PROJECT_ID = "my-test-project-370503"
-    PUBSUB_SUBSCRIPTION = f"projects/{PROJECT_ID}/subscriptions/gcp-dataflow-topic-001-sub"
-    BUCKET_NAME = "gs://gp-ingest-source-001"
-    SERVICE_ACCOUNT = "gp-df-service-account-001@my-test-project-370503.iam.gserviceaccount.com"
-    DLQ_TOPIC = f"projects/{PROJECT_ID}/topics/gcp-dataflow-topic-001-dlq"
+    PROJECT_ID = "[your_project_name]"
+    PUBSUB_SUBSCRIPTION = f"projects/{PROJECT_ID}/subscriptions/[your_pubsub_subscription]"
+    BUCKET_NAME = "gs://[your_bucket_name]"
+    SERVICE_ACCOUNT = "[your_service_account]"
 
     options = PipelineOptions(
         streaming=True, # Set to True for streaming data
         project=PROJECT_ID,
         job_name="cleanse-and-filter",
-        temp_location="{}/dataflow_temp".format(BUCKET_NAME),
+        temp_location=f"{BUCKET_NAME}/dataflow_temp",
         region="us-central1",
         runner="DirectRunner", # Run the pipeline locally for testing
         # runner="DataflowRunner", # Run the pipeline on Dataflow
