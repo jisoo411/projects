@@ -1,0 +1,22 @@
+# Confidence threshold configuration
+# Versioned: update this file and bump `version` whenever thresholds are re-calibrated.
+# Calibration procedure: evaluate against the LangSmith golden dataset (100+ labeled queries).
+# Use the F1-maximising operating point. Re-calibrate whenever embedding or reranker model changes.
+
+version: "1.0.0"
+calibrated_against: "rerank-english-v3.0 + text-embedding-3-small"
+calibration_date: "2026-04-22"
+
+thresholds:
+  normal:
+    value: 0.6
+    description: "Cohere relevance_score threshold on normal reranking path"
+  fallback:
+    value: 0.5
+    description: "pgvector cosine similarity threshold when Cohere is unavailable"
+
+ab_test:
+  enabled: false
+  candidate_normal: 0.65
+  candidate_fallback: 0.55
+  description: "Set enabled=true to test candidate thresholds against the golden dataset"
