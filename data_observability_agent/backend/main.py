@@ -52,12 +52,24 @@ async def _watchdog_loop(client: MultiServerMCPClient) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from apscheduler.schedulers.asyncio import AsyncIOScheduler
+    from ingestion.airflow_ingestor import ingest_airflow
+    from ingestion.quality_ingestor import ingest_quality
+
     global _mcp_client, _watchdog_task
     _mcp_client = await _start_mcp_subprocess()
     tools = await _load_mcp_tools(_mcp_client)
     set_workflow_tools(tools)
     _watchdog_task = asyncio.create_task(_watchdog_loop(_mcp_client))
+
+    scheduler = AsyncIOScheduler()
+    scheduler.add_job(ingest_airflow, "interval", minutes=15, id="airflow_ingestor")
+    scheduler.add_job(ingest_quality, "interval", minutes=15, id="quality_ingestor")
+    scheduler.start()
+
     yield
+
+    scheduler.shutdown(wait=False)
     _watchdog_task.cancel()
     try:
         await _watchdog_task
