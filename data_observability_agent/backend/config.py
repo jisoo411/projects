@@ -7,7 +7,8 @@ class Settings(BaseSettings):
     # Required
     openai_api_key: str = ""
     cohere_api_key: str = ""
-    database_url: str = ""
+    database_url: str = ""        # pipeline_watch DB (Neon)
+    source_database_url: str = "" # source data DB (Neon, same project)
     airflow_base_url: str = ""
     api_key: str = ""
     audit_hmac_secret: str = ""

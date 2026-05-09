@@ -79,6 +79,7 @@ def app_with_mocks(mock_pool):
     """Build the FastAPI app with all external I/O patched."""
     with patch("rag.retriever.get_pool", new=AsyncMock(return_value=mock_pool)), \
          patch("tools.db_quality_tool.get_pool", new=AsyncMock(return_value=mock_pool)), \
+         patch("tools.db_quality_tool.get_source_pool", new=AsyncMock(return_value=mock_pool)), \
          patch("api.health.get_pool", new=AsyncMock(return_value=mock_pool)), \
          patch("api.status.get_pool", new=AsyncMock(return_value=mock_pool)), \
          patch("rag.embedder._client") as mock_embed_cls, \

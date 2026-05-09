@@ -12,6 +12,9 @@ from config import settings
 _pool: asyncpg.Pool | None = None
 _pool_lock = asyncio.Lock()
 
+_source_pool: asyncpg.Pool | None = None
+_source_pool_lock = asyncio.Lock()
+
 _TABLE_FTS_CONFIG: dict[str, str] = {
     "airflow_embeddings": "simple",
     "quality_embeddings": "english",
@@ -38,6 +41,23 @@ async def get_pool() -> asyncpg.Pool:
                 },
             )
     return _pool
+
+
+async def get_source_pool() -> asyncpg.Pool:
+    global _source_pool
+    async with _source_pool_lock:
+        if _source_pool is None:
+            _source_pool = await asyncpg.create_pool(
+                settings.source_database_url,
+                min_size=1,
+                max_size=5,
+                server_settings={
+                    "statement_timeout": str(settings.statement_timeout_ms),
+                    "idle_in_transaction_session_timeout": "30000",
+                    "lock_timeout": "5000",
+                },
+            )
+    return _source_pool
 
 
 async def _hybrid_search(

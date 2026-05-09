@@ -65,7 +65,8 @@ async def test_ingest_airflow_embeds_and_upserts():
     pool = AsyncMock()
     pool.acquire = MagicMock(return_value=conn)
 
-    with patch("ingestion.airflow_ingestor.get_pool", new=AsyncMock(return_value=pool)), \
+    with patch("ingestion.airflow_ingestor.get_source_pool", new=AsyncMock(return_value=pool)), \
+         patch("ingestion.airflow_ingestor.get_pool", new=AsyncMock(return_value=pool)), \
          patch("ingestion.airflow_ingestor.embed", new=AsyncMock(return_value=[0.1] * 1536)):
         from ingestion.airflow_ingestor import ingest_airflow
         await ingest_airflow()
@@ -100,7 +101,8 @@ async def test_ingest_airflow_source_uri_format():
 
     conn.execute = AsyncMock(side_effect=capture_execute)
 
-    with patch("ingestion.airflow_ingestor.get_pool", new=AsyncMock(return_value=pool)), \
+    with patch("ingestion.airflow_ingestor.get_source_pool", new=AsyncMock(return_value=pool)), \
+         patch("ingestion.airflow_ingestor.get_pool", new=AsyncMock(return_value=pool)), \
          patch("ingestion.airflow_ingestor.embed", new=AsyncMock(return_value=[0.1] * 1536)):
         from ingestion.airflow_ingestor import ingest_airflow
         await ingest_airflow()

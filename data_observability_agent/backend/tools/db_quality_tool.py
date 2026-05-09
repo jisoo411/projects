@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from langchain_core.tools import StructuredTool
 from pydantic import BaseModel
 
-from rag.retriever import get_pool
+from rag.retriever import get_pool, get_source_pool
 
 
 class QualityCheckInput(BaseModel):
@@ -17,7 +17,7 @@ class QualityCheckInput(BaseModel):
 async def _compute_quality_metrics_async(
     table_name: str, timestamp_column: str, nullable_column: str
 ) -> dict:
-    pool = await get_pool()
+    pool = await get_source_pool()
     ts = datetime.now(timezone.utc)
     async with pool.acquire() as conn:
         row_count = await conn.fetchval(f"SELECT COUNT(*) FROM {table_name}")  # noqa: S608

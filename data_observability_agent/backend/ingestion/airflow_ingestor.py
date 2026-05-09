@@ -1,6 +1,6 @@
 from datetime import datetime, timezone, timedelta
 from rag.embedder import embed
-from rag.retriever import get_pool
+from rag.retriever import get_pool, get_source_pool
 
 
 async def ingest_airflow() -> None:
@@ -9,10 +9,11 @@ async def ingest_airflow() -> None:
     Fetches task instances with log_text populated for runs in the last 2 hours.
     Upserts (dag_id, dag_run_id, task_id, try_number) as the natural key.
     """
-    pool = await get_pool()
+    source_pool = await get_source_pool()
+    write_pool = await get_pool()
     cutoff = datetime.now(timezone.utc) - timedelta(hours=2)
 
-    async with pool.acquire() as conn:
+    async with source_pool.acquire() as conn:
         rows = await conn.fetch(
             """
             SELECT dag_id, dag_run_id, task_id, try_number, log_text, logical_date
@@ -45,7 +46,7 @@ async def ingest_airflow() -> None:
         )
         embedding = await embed(chunk_text)
 
-        async with pool.acquire() as conn:
+        async with write_pool.acquire() as conn:
             await conn.execute(
                 """
                 INSERT INTO airflow_embeddings
