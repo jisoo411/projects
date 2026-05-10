@@ -5,13 +5,13 @@ from config import settings
 
 @lru_cache(maxsize=1)
 def _client() -> AsyncOpenAI:
-    return AsyncOpenAI(
-        api_key=settings.openai_api_key,
-        max_retries=settings.openai_max_retries,
-        default_headers={"x-session-id": "pipeline-observability-embedder"},
-    )
+    return AsyncOpenAI(api_key=settings.openai_api_key, max_retries=settings.openai_max_retries)
 
 
 async def embed(text: str) -> list[float]:
-    resp = await _client().embeddings.create(model="text-embedding-3-small", input=text)
+    resp = await _client().embeddings.create(
+        model="text-embedding-3-small",
+        input=text,
+        user="pipeline-observability-embedder",
+    )
     return resp.data[0].embedding

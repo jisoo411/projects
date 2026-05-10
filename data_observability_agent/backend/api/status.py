@@ -12,7 +12,7 @@ async def _get_dag_status_cache() -> list[dict]:
     pool = await get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            "SELECT dag_id, state, observed_at FROM dag_status_cache "
+            "SELECT dag_id, last_run_state AS state, observed_at FROM dag_status_cache "
             "WHERE dag_id = ANY($1::text[]) ORDER BY observed_at DESC",
             _MONITORED_DAGS,
         )

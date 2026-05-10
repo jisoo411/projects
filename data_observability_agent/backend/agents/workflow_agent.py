@@ -75,7 +75,7 @@ async def run_workflow_agent(query: str) -> tuple[str, bool]:
         temperature=0,
         max_tokens=2048,
         openai_api_key=settings.openai_api_key,
-        default_headers={"x-session-id": "pipeline-observability-workflow"},
+        model_kwargs={"safety_identifier": "pipeline-observability-workflow"},
     )
     tools = _workflow_tools
     system_msg = SYSTEM_PROMPT.format(rag_context=rag_context)

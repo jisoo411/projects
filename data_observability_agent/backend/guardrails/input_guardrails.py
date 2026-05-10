@@ -42,10 +42,7 @@ def _anonymizer() -> AnonymizerEngine:
 
 @lru_cache(maxsize=1)
 def _openai_client() -> AsyncOpenAI:
-    return AsyncOpenAI(
-        api_key=settings.openai_api_key,
-        default_headers={"x-session-id": "pipeline-observability-guardrails"},
-    )
+    return AsyncOpenAI(api_key=settings.openai_api_key)
 
 
 def _redact_pii(text: str) -> str:
@@ -59,6 +56,7 @@ async def _classify_topic(query: str) -> bool:
         model="gpt-4o-mini",
         temperature=0,
         max_tokens=5,
+        safety_identifier="pipeline-observability-guardrails",
         messages=[
             {
                 "role": "system",
@@ -71,7 +69,12 @@ async def _classify_topic(query: str) -> bool:
             {"role": "user", "content": query},
         ],
     )
-    return resp.choices[0].message.content.strip().upper().startswith("YES")
+    # Proxy may return plain text when content-type is not JSON; handle both paths.
+    if isinstance(resp, str):
+        content = resp
+    else:
+        content = resp.choices[0].message.content or ""
+    return content.strip().upper().startswith("YES")
 
 
 async def check_input(query: str) -> GuardrailResult:
