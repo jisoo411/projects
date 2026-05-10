@@ -15,19 +15,17 @@ _watchdog_task: asyncio.Task | None = None
 
 async def _start_mcp_subprocess() -> MultiServerMCPClient:
     """Start Airflow MCP server as a stdio subprocess and return the connected client."""
-    client = MultiServerMCPClient({
+    return MultiServerMCPClient({
         "airflow": {
             "command": sys.executable,
             "args": ["-m", "airflow_mcp.server"],
             "transport": "stdio",
         }
     })
-    await client.__aenter__()
-    return client
 
 
 async def _load_mcp_tools(client: MultiServerMCPClient) -> list:
-    return client.get_tools()
+    return await client.get_tools()
 
 
 async def _watchdog_loop(client: MultiServerMCPClient) -> None:
@@ -36,15 +34,11 @@ async def _watchdog_loop(client: MultiServerMCPClient) -> None:
     while True:
         await asyncio.sleep(30)
         try:
-            tools = client.get_tools()
+            tools = await client.get_tools()
             ping_tool = next((t for t in tools if t.name == "ping"), None)
             if ping_tool:
                 await ping_tool.arun({})
         except Exception:
-            try:
-                await client.__aexit__(None, None, None)
-            except Exception:
-                pass
             _mcp_client = await _start_mcp_subprocess()
             new_tools = await _load_mcp_tools(_mcp_client)
             set_workflow_tools(new_tools)
@@ -76,7 +70,7 @@ async def lifespan(app: FastAPI):
     except asyncio.CancelledError:
         pass
     if _mcp_client:
-        await _mcp_client.__aexit__(None, None, None)
+        pass  # MultiServerMCPClient >= 0.1.0 manages subprocess lifecycle internally
 
 
 app = FastAPI(title="Pipeline Observability API", lifespan=lifespan)
