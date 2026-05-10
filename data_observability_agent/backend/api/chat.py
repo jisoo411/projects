@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, Header
 from fastapi.responses import StreamingResponse
 from models import ChatRequest
 from guardrails.input_guardrails import check_input
-from guardrails.output_guardrails import check_output
+from guardrails.output_guardrails import OutputGuardrailResult, check_output
 from agents.orchestrator import run_orchestrator
 from rag.retriever import get_pool
 from config import settings
@@ -76,17 +76,31 @@ async def _stream_chat(query: str, api_key: str):
     except asyncio.CancelledError:
         orchestrator_task.cancel()
         raise
+    except Exception:
+        response_text = (
+            "The pipeline observability system is currently experiencing issues "
+            "and could not complete your request. Please try again shortly."
+        )
+        rerank_fallback = True
 
     output_result = check_output(response_text, context=query)
     if output_result.blocked:
-        response_ms = int((time.monotonic() - t0) * 1000)
-        await _write_audit_log(
-            guardrail_result.redacted_query,
-            output_result.block_reason or "output_blocked",
-            response_ms,
-            api_key_hash,
-        )
-        raise HTTPException(status_code=500, detail="Response failed output validation.")
+        if output_result.block_reason == "missing_citations":
+            # Degraded responses have no live URIs to cite — pass through and
+            # let the [DEGRADED_RERANKING] SSE flag inform the client.
+            output_result = OutputGuardrailResult(
+                blocked=False, block_reason=None, response=response_text
+            )
+            rerank_fallback = True
+        else:
+            response_ms = int((time.monotonic() - t0) * 1000)
+            await _write_audit_log(
+                guardrail_result.redacted_query,
+                output_result.block_reason or "output_blocked",
+                response_ms,
+                api_key_hash,
+            )
+            raise HTTPException(status_code=500, detail="Response failed output validation.")
 
     response_ms = int((time.monotonic() - t0) * 1000)
     degraded_flag = "data: [DEGRADED_RERANKING]\n\n" if rerank_fallback else ""
