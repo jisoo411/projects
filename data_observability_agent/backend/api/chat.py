@@ -72,7 +72,7 @@ async def _stream_chat(query: str, api_key: str):
 
     orchestrator_task = asyncio.create_task(run_orchestrator(query))
     try:
-        response_text, rerank_fallback = await orchestrator_task
+        response_text, rerank_fallback, agent_context = await orchestrator_task
     except asyncio.CancelledError:
         orchestrator_task.cancel()
         raise
@@ -82,8 +82,12 @@ async def _stream_chat(query: str, api_key: str):
             "and could not complete your request. Please try again shortly."
         )
         rerank_fallback = True
+        agent_context = ""
 
-    output_result = check_output(response_text, context=query)
+    # Pass query + agent results as context so the hallucination check can
+    # verify citations against what the agents actually retrieved, not just
+    # against the raw user query (which won't contain specific DAG/table names).
+    output_result = check_output(response_text, context=f"{query}\n{agent_context}")
     if output_result.blocked:
         if output_result.block_reason == "missing_citations":
             # Degraded responses have no live URIs to cite — pass through and

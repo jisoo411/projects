@@ -101,8 +101,12 @@ def _build_graph():
 _graph = _build_graph()
 
 
-async def run_orchestrator(query: str) -> tuple[str, bool]:
-    """Fan out to both sub-agents, synthesize with GPT-4o. Returns (text, rerank_fallback)."""
+async def run_orchestrator(query: str) -> tuple[str, bool, str]:
+    """Fan out to both sub-agents, synthesize with GPT-4o.
+
+    Returns (response_text, rerank_fallback, agent_context) where agent_context
+    is the combined workflow + quality results passed to the hallucination checker.
+    """
     initial_state: OrchestratorState = {
         "query": query,
         "workflow_result": "",
@@ -113,4 +117,7 @@ async def run_orchestrator(query: str) -> tuple[str, bool]:
         "rerank_fallback": False,
     }
     final_state = await _graph.ainvoke(initial_state)
-    return final_state["response"], final_state["rerank_fallback"]
+    agent_context = (
+        f"{final_state['workflow_result']}\n\n{final_state['quality_result']}"
+    )
+    return final_state["response"], final_state["rerank_fallback"], agent_context
