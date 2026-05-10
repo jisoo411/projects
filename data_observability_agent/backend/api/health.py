@@ -13,7 +13,7 @@ async def _ping_mcp() -> bool:
     if client is None:
         return False
     try:
-        tools = client.get_tools()
+        tools = await client.get_tools()
         ping_tool = next((t for t in tools if t.name == "ping"), None)
         if ping_tool is None:
             return False
