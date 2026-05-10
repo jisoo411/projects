@@ -158,33 +158,5 @@ CREATE TABLE IF NOT EXISTS audit_log (
 
 CREATE INDEX IF NOT EXISTS al_occurred_at_idx ON audit_log (occurred_at DESC);
 
--- ── Freshness indexes on monitored tables ──────────────────────────────────
--- Create monitored tables if they do not exist (dev/demo scaffold).
-CREATE TABLE IF NOT EXISTS orders (
-    order_id    TEXT PRIMARY KEY,
-    customer_id TEXT,
-    status      TEXT,
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS orders_updated_at_idx ON orders (updated_at DESC);
-
-CREATE TABLE IF NOT EXISTS users (
-    user_id      TEXT PRIMARY KEY,
-    email        TEXT,
-    last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS users_last_seen_at_idx ON users (last_seen_at DESC);
-
-CREATE TABLE IF NOT EXISTS inventory_items (
-    item_id    TEXT PRIMARY KEY,
-    quantity   INTEGER,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS inventory_items_updated_at_idx ON inventory_items (updated_at DESC);
-
-CREATE TABLE IF NOT EXISTS revenue_aggregate (
-    date        DATE PRIMARY KEY,
-    revenue_usd NUMERIC,
-    computed_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS revenue_aggregate_computed_at_idx ON revenue_aggregate (computed_at DESC);
+-- Source data tables (orders, users, inventory_items, revenue_aggregate, airflow_task_logs)
+-- belong in the source_data logical database. See migrations/002_source_data.sql.
