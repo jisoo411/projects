@@ -23,7 +23,7 @@ MOCK_CACHED = {
 
 @pytest.mark.asyncio
 async def test_health_returns_200_when_all_ok():
-    with patch("api.health._ping_mcp", new=AsyncMock(return_value=True)), \
+    with patch("api.health._ping_mcp", new=MagicMock(return_value=True)), \
          patch("api.health._ping_db", new=AsyncMock(return_value=True)):
         app = _make_app()
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -34,7 +34,7 @@ async def test_health_returns_200_when_all_ok():
 
 @pytest.mark.asyncio
 async def test_health_returns_503_when_mcp_down():
-    with patch("api.health._ping_mcp", new=AsyncMock(return_value=False)), \
+    with patch("api.health._ping_mcp", new=MagicMock(return_value=False)), \
          patch("api.health._ping_db", new=AsyncMock(return_value=True)):
         app = _make_app()
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -44,7 +44,7 @@ async def test_health_returns_503_when_mcp_down():
 
 @pytest.mark.asyncio
 async def test_health_returns_503_when_db_down():
-    with patch("api.health._ping_mcp", new=AsyncMock(return_value=True)), \
+    with patch("api.health._ping_mcp", new=MagicMock(return_value=True)), \
          patch("api.health._ping_db", new=AsyncMock(return_value=False)):
         app = _make_app()
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:

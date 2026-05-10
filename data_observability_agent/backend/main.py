@@ -11,6 +11,7 @@ from config import settings
 
 _mcp_client: MultiServerMCPClient | None = None
 _watchdog_task: asyncio.Task | None = None
+_mcp_healthy: bool = False  # set True after first successful tool load; watchdog maintains it
 
 
 async def _start_mcp_subprocess() -> MultiServerMCPClient:
@@ -30,7 +31,7 @@ async def _load_mcp_tools(client: MultiServerMCPClient) -> list:
 
 async def _watchdog_loop(client: MultiServerMCPClient) -> None:
     """Ping the MCP server every 30 s; re-initialise on failure."""
-    global _mcp_client
+    global _mcp_client, _mcp_healthy
     while True:
         await asyncio.sleep(30)
         try:
@@ -38,10 +39,13 @@ async def _watchdog_loop(client: MultiServerMCPClient) -> None:
             ping_tool = next((t for t in tools if t.name == "ping"), None)
             if ping_tool:
                 await ping_tool.arun({})
+            _mcp_healthy = True
         except Exception:
+            _mcp_healthy = False
             _mcp_client = await _start_mcp_subprocess()
             new_tools = await _load_mcp_tools(_mcp_client)
             set_workflow_tools(new_tools)
+            _mcp_healthy = True
 
 
 @asynccontextmanager
@@ -54,6 +58,7 @@ async def lifespan(app: FastAPI):
     _mcp_client = await _start_mcp_subprocess()
     tools = await _load_mcp_tools(_mcp_client)
     set_workflow_tools(tools)
+    _mcp_healthy = True
     _watchdog_task = asyncio.create_task(_watchdog_loop(_mcp_client))
 
     scheduler = AsyncIOScheduler()
