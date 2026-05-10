@@ -95,6 +95,7 @@ async def run_quality_agent(query: str) -> tuple[str, bool]:
         temperature=0,
         max_tokens=2048,
         openai_api_key=settings.openai_api_key,
+        default_headers={"x-session-id": "pipeline-observability-quality"},
     )
     system_msg = SYSTEM_PROMPT.format(cached_context=cached_context, rag_context=rag_context)
     graph = _create_agent(llm, tools, system_prompt=system_msg)

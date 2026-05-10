@@ -70,6 +70,7 @@ async def _synthesis_node(state: OrchestratorState) -> OrchestratorState:
         temperature=0,
         max_tokens=2048,
         openai_api_key=settings.openai_api_key,
+        default_headers={"x-session-id": "pipeline-observability-orchestrator"},
     )
     system_content = SYNTHESIS_SYSTEM.format(
         workflow_result=state["workflow_result"],

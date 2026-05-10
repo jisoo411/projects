@@ -5,7 +5,11 @@ from config import settings
 
 @lru_cache(maxsize=1)
 def _client() -> AsyncOpenAI:
-    return AsyncOpenAI(api_key=settings.openai_api_key, max_retries=settings.openai_max_retries)
+    return AsyncOpenAI(
+        api_key=settings.openai_api_key,
+        max_retries=settings.openai_max_retries,
+        default_headers={"x-session-id": "pipeline-observability-embedder"},
+    )
 
 
 async def embed(text: str) -> list[float]:

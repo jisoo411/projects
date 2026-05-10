@@ -42,7 +42,10 @@ def _anonymizer() -> AnonymizerEngine:
 
 @lru_cache(maxsize=1)
 def _openai_client() -> AsyncOpenAI:
-    return AsyncOpenAI(api_key=settings.openai_api_key)
+    return AsyncOpenAI(
+        api_key=settings.openai_api_key,
+        default_headers={"x-session-id": "pipeline-observability-guardrails"},
+    )
 
 
 def _redact_pii(text: str) -> str:
