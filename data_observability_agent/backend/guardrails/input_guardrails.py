@@ -56,7 +56,7 @@ async def _classify_topic(query: str) -> bool:
         model="gpt-4o-mini",
         temperature=0,
         max_tokens=5,
-        safety_identifier="pipeline-observability-guardrails",
+        user="pipeline-observability-guardrails",
         messages=[
             {
                 "role": "system",
