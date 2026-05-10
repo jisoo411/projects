@@ -1,6 +1,7 @@
 import asyncio
 import hmac
 import hashlib
+import json
 import time
 from fastapi import APIRouter, HTTPException, Header
 from fastapi.responses import StreamingResponse
@@ -114,7 +115,8 @@ async def _stream_chat(query: str, api_key: str):
             yield degraded_flag
         text = output_result.response
         for i in range(0, len(text), 256):
-            yield f"data: {text[i:i+256]}\n\n"
+            # JSON-encode each chunk so embedded newlines don't break SSE framing.
+            yield f"data: {json.dumps(text[i:i+256])}\n\n"
         yield "data: [DONE]\n\n"
         await _write_audit_log(
             guardrail_result.redacted_query, "ok", response_ms, api_key_hash

@@ -62,7 +62,9 @@ Data quality agent report:
 {quality_result}
 
 Instructions:
-- Combine both reports into a single coherent answer.
+- If a report contains an error or unavailability message (e.g. "timed out", "unavailable", "No host"), \
+acknowledge that the data source is temporarily unavailable rather than incorporating error text as factual data.
+- Combine the available reports into a single coherent answer.
 - Do not repeat information; merge overlapping findings.
 - Preserve ALL source URIs from both reports.
 - End with a "Sources:" section listing every airflow: and dbcheck: URI cited."""
