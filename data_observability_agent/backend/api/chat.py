@@ -49,7 +49,7 @@ async def _write_audit_log(
     pool = await get_pool()
     async with pool.acquire() as conn:
         await conn.execute(
-            "INSERT INTO audit_log (query_redacted, guardrail_outcome, response_ms, api_key_hash) "
+            "INSERT INTO audit_log (query_text, guardrail_outcome, response_ms, api_key_id) "
             "VALUES ($1, $2, $3, $4)",
             redacted_query, guardrail_outcome, response_ms, api_key_hash,
         )
