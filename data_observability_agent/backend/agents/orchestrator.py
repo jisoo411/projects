@@ -32,12 +32,16 @@ async def _fan_out_node(state: OrchestratorState) -> OrchestratorState:
     for t in pending:
         t.cancel()
 
-    wf_text, wf_fallback = (
-        wf_task.result() if wf_task in done else ("(workflow agent timed out)", False)
-    )
-    qa_text, qa_fallback = (
-        qa_task.result() if qa_task in done else ("(quality agent timed out)", False)
-    )
+    def _safe(task: asyncio.Task, label: str) -> tuple[str, bool]:
+        if task not in done:
+            return (f"({label} timed out)", True)
+        try:
+            return task.result()
+        except Exception as exc:
+            return (f"({label} unavailable: {exc})", True)
+
+    wf_text, wf_fallback = _safe(wf_task, "workflow agent")
+    qa_text, qa_fallback = _safe(qa_task, "quality agent")
 
     return {
         **state,

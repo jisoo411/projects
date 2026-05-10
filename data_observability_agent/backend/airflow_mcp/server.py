@@ -21,7 +21,10 @@ def _dag_schedule(dag) -> str | None:
 
 
 def _client():
-    cfg = airflow_client.Configuration(host=settings.airflow_base_url)
+    base_url = settings.airflow_base_url
+    if base_url and not base_url.startswith(("http://", "https://")):
+        base_url = f"https://{base_url}"
+    cfg = airflow_client.Configuration(host=base_url)
     if settings.airflow_token:
         cfg.access_token = settings.airflow_token
     else:
