@@ -1,29 +1,71 @@
-from tools.db_quality_tool import _compute_quality_metrics_async
 from rag.embedder import embed
-from rag.retriever import get_pool
+from rag.retriever import get_pool, get_source_pool
+from tools.db_quality_tool import _compute_quality_metrics_async
 
-_MONITORED_TABLES = [
-    ("orders",            "updated_at", "order_id"),
-    ("users",             "updated_at", "id"),
-    ("inventory_items",   "updated_at", "id"),
-    ("revenue_aggregate", "updated_at", "id"),
-]
+# Preferred column names for timestamp and null-rate checks, in priority order.
+_TS_CANDIDATES = ["updated_at", "ingested_at", "created_at", "logical_date"]
+
+
+async def _discover_tables() -> list[tuple[str, str, str]]:
+    """Return (table_name, timestamp_col, nullable_col) for every user table in source_data."""
+    pool = await get_source_pool()
+    async with pool.acquire() as conn:
+        table_names = [
+            r["table_name"] for r in await conn.fetch(
+                "SELECT table_name FROM information_schema.tables "
+                "WHERE table_schema = 'public' AND table_type = 'BASE TABLE' "
+                "ORDER BY table_name"
+            )
+        ]
+
+        result = []
+        for table in table_names:
+            col_names = {
+                r["column_name"] for r in await conn.fetch(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_schema = 'public' AND table_name = $1",
+                    table,
+                )
+            }
+
+            ts_col = next((c for c in _TS_CANDIDATES if c in col_names), None)
+            if ts_col is None:
+                continue  # no recognisable timestamp column — skip
+
+            pk_row = await conn.fetchrow(
+                "SELECT kcu.column_name FROM information_schema.key_column_usage kcu "
+                "JOIN information_schema.table_constraints tc "
+                "ON kcu.constraint_name = tc.constraint_name "
+                "AND kcu.table_schema = tc.table_schema "
+                "WHERE tc.table_schema = 'public' AND tc.table_name = $1 "
+                "AND tc.constraint_type = 'PRIMARY KEY' "
+                "ORDER BY kcu.ordinal_position LIMIT 1",
+                table,
+            )
+            nullable_col = pk_row["column_name"] if pk_row else ts_col
+
+            result.append((table, ts_col, nullable_col))
+
+    return result
 
 
 async def ingest_quality() -> None:
-    """Compute quality metrics for all monitored tables.
+    """Compute quality metrics for all tables in source_data.
 
-    Upserts the latest snapshot into live_metrics and quality_metrics_history,
+    Upserts snapshots into live_metrics and quality_metrics_history,
     then embeds a text summary into quality_embeddings for RAG retrieval.
     """
+    tables = await _discover_tables()
     pool = await get_pool()
-    for table_name, ts_col, nullable_col in _MONITORED_TABLES:
+
+    for table_name, ts_col, nullable_col in tables:
         metrics = await _compute_quality_metrics_async(table_name, ts_col, nullable_col)
         status = (
             "ok" if metrics["score"] >= 0.8
             else "warn" if metrics["score"] >= 0.6
             else "critical"
         )
+
         async with pool.acquire() as conn:
             await conn.execute(
                 """
