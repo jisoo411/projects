@@ -91,6 +91,14 @@ class AgentExecutor:
 
 async def run_workflow_agent(query: str) -> tuple[str, bool]:
     """Run the workflow sub-agent. Returns (response_text, rerank_fallback)."""
+    try:
+        return await _run_workflow_agent_inner(query)
+    except Exception:
+        logger.exception("workflow agent failed for query %r", query)
+        raise
+
+
+async def _run_workflow_agent_inner(query: str) -> tuple[str, bool]:
     dag_id = await _extract_dag_id(query)
     chunks, rerank_fallback = await retrieve(
         query,
