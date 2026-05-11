@@ -112,7 +112,8 @@ def get_task_log(
             content = resp.content
             pages.append("\n".join(content) if isinstance(content, list) else (content or ""))
             page_count += 1
-            token = resp.next_token if isinstance(resp.next_token, str) else None
+            raw_token = getattr(resp, "next_token", None)
+            token = raw_token if isinstance(raw_token, str) else None
             if not token:
                 break
     return {
