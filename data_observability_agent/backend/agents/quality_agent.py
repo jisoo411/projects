@@ -4,18 +4,32 @@ from langchain.agents import create_agent as _create_agent
 from langchain_openai import ChatOpenAI
 
 from config import settings
-from rag.retriever import retrieve
+from rag.retriever import get_pool, retrieve
 from tools.db_quality_tool import get_cached_metrics, get_quality_tools
 
 _live_check_sem = asyncio.Semaphore(settings.max_concurrent_live_checks)
 
-_MONITORED_TABLES = ["orders", "users", "inventory_items", "revenue_aggregate"]
+# Populated on first call; refreshed each agent invocation so new tables are picked up.
+_monitored_tables_cache: list[str] = []
 
 
-def _extract_table_name(query: str) -> str | None:
+async def _get_monitored_tables() -> list[str]:
+    global _monitored_tables_cache
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT DISTINCT table_name FROM live_metrics "
+            "WHERE schema_name = 'public' ORDER BY table_name"
+        )
+    _monitored_tables_cache = [r["table_name"] for r in rows]
+    return _monitored_tables_cache
+
+
+async def _extract_table_name(query: str) -> str | None:
     """Detect an explicitly named monitored table in the query."""
+    tables = await _get_monitored_tables()
     q_lower = query.lower()
-    for table in _MONITORED_TABLES:
+    for table in tables:
         if table.replace("_", " ") in q_lower or table in q_lower:
             return table
     return None
@@ -59,10 +73,11 @@ async def run_quality_agent(query: str) -> tuple[str, bool]:
     Reads live_metrics cache for general queries.
     Triggers on-demand live check (gated by semaphore) when a specific table is named.
     """
-    table_name = _extract_table_name(query)
+    table_name = await _extract_table_name(query)
+    monitored_tables = await _get_monitored_tables()
 
     cached_lines: list[str] = []
-    for tbl in _MONITORED_TABLES:
+    for tbl in monitored_tables:
         cached = await get_cached_metrics(tbl)
         if cached:
             cached_lines.append(
@@ -95,6 +110,7 @@ async def run_quality_agent(query: str) -> tuple[str, bool]:
         temperature=0,
         max_tokens=2048,
         openai_api_key=settings.openai_api_key,
+        model_kwargs={"user": "pipeline-observability-quality"},
     )
     system_msg = SYSTEM_PROMPT.format(cached_context=cached_context, rag_context=rag_context)
     graph = _create_agent(llm, tools, system_prompt=system_msg)

@@ -25,7 +25,7 @@ services:
       - key: API_KEY
         sync: false
       - key: FRONTEND_ORIGIN
-        value: https://pipeline-observability.vercel.app
+        value: https://projects-glen-p-project.vercel.app
       - key: MAX_CONCURRENT_LIVE_CHECKS
         value: "3"
       - key: MAX_LOG_PAGES

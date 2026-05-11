@@ -9,7 +9,7 @@ from agents.quality_agent import run_quality_agent
 from agents.workflow_agent import run_workflow_agent
 from config import settings
 
-AGENT_TIMEOUT_S: float = 30.0
+AGENT_TIMEOUT_S: float = 60.0
 
 
 class OrchestratorState(TypedDict):
@@ -32,12 +32,16 @@ async def _fan_out_node(state: OrchestratorState) -> OrchestratorState:
     for t in pending:
         t.cancel()
 
-    wf_text, wf_fallback = (
-        wf_task.result() if wf_task in done else ("(workflow agent timed out)", False)
-    )
-    qa_text, qa_fallback = (
-        qa_task.result() if qa_task in done else ("(quality agent timed out)", False)
-    )
+    def _safe(task: asyncio.Task, label: str) -> tuple[str, bool]:
+        if task not in done:
+            return (f"({label} timed out)", True)
+        try:
+            return task.result()
+        except Exception as exc:
+            return (f"({label} unavailable: {exc})", True)
+
+    wf_text, wf_fallback = _safe(wf_task, "workflow agent")
+    qa_text, qa_fallback = _safe(qa_task, "quality agent")
 
     return {
         **state,
@@ -58,8 +62,11 @@ Data quality agent report:
 {quality_result}
 
 Instructions:
-- Combine both reports into a single coherent answer.
+- If a report contains an error or unavailability message (e.g. "timed out", "unavailable", "No host"), \
+acknowledge that the data source is temporarily unavailable rather than incorporating error text as factual data.
+- Combine the available reports into a single coherent answer.
 - Do not repeat information; merge overlapping findings.
+- Write in plain prose sentences. Do NOT use markdown formatting, bullet points, numbered lists, or bold text.
 - Preserve ALL source URIs from both reports.
 - End with a "Sources:" section listing every airflow: and dbcheck: URI cited."""
 
@@ -70,6 +77,7 @@ async def _synthesis_node(state: OrchestratorState) -> OrchestratorState:
         temperature=0,
         max_tokens=2048,
         openai_api_key=settings.openai_api_key,
+        model_kwargs={"user": "pipeline-observability-orchestrator"},
     )
     system_content = SYNTHESIS_SYSTEM.format(
         workflow_result=state["workflow_result"],
@@ -96,8 +104,12 @@ def _build_graph():
 _graph = _build_graph()
 
 
-async def run_orchestrator(query: str) -> tuple[str, bool]:
-    """Fan out to both sub-agents, synthesize with GPT-4o. Returns (text, rerank_fallback)."""
+async def run_orchestrator(query: str) -> tuple[str, bool, str]:
+    """Fan out to both sub-agents, synthesize with GPT-4o.
+
+    Returns (response_text, rerank_fallback, agent_context) where agent_context
+    is the combined workflow + quality results passed to the hallucination checker.
+    """
     initial_state: OrchestratorState = {
         "query": query,
         "workflow_result": "",
@@ -108,4 +120,7 @@ async def run_orchestrator(query: str) -> tuple[str, bool]:
         "rerank_fallback": False,
     }
     final_state = await _graph.ainvoke(initial_state)
-    return final_state["response"], final_state["rerank_fallback"]
+    agent_context = (
+        f"{final_state['workflow_result']}\n\n{final_state['quality_result']}"
+    )
+    return final_state["response"], final_state["rerank_fallback"], agent_context

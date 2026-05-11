@@ -9,5 +9,9 @@ def _client() -> AsyncOpenAI:
 
 
 async def embed(text: str) -> list[float]:
-    resp = await _client().embeddings.create(model="text-embedding-3-small", input=text)
+    resp = await _client().embeddings.create(
+        model="text-embedding-3-small",
+        input=text,
+        user="pipeline-observability-embedder",
+    )
     return resp.data[0].embedding

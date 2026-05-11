@@ -6,21 +6,10 @@ from rag.retriever import get_pool
 router = APIRouter()
 
 
-async def _ping_mcp() -> bool:
-    """Call the MCP ping tool with a 5-second hard deadline."""
+def _ping_mcp() -> bool:
+    """Check MCP health via the watchdog-maintained flag — no subprocess I/O."""
     import main as app_module  # lazy — avoids circular import at load time
-    client = app_module._mcp_client
-    if client is None:
-        return False
-    try:
-        tools = await client.get_tools()
-        ping_tool = next((t for t in tools if t.name == "ping"), None)
-        if ping_tool is None:
-            return False
-        await asyncio.wait_for(ping_tool.arun({}), timeout=5.0)
-        return True
-    except Exception:
-        return False
+    return app_module._mcp_client is not None and app_module._mcp_healthy
 
 
 async def _ping_db() -> bool:
@@ -35,7 +24,8 @@ async def _ping_db() -> bool:
 
 @router.get("/health")
 async def health():
-    mcp_ok, db_ok = await asyncio.gather(_ping_mcp(), _ping_db())
+    mcp_ok = _ping_mcp()
+    db_ok = await _ping_db()
     if mcp_ok and db_ok:
         return {"status": "ok", "mcp": "ok", "db": "ok"}
     body = {

@@ -46,13 +46,18 @@ export function ChatPanel({ apiKey }: ChatPanelProps) {
         const text = decoder.decode(value);
         for (const line of text.split("\n")) {
           if (line.startsWith("data: ")) {
-            const chunk = line.slice(6);
-            if (chunk === "[DONE]") break;
-            if (chunk === "[DEGRADED_RERANKING]") {
+            const raw = line.slice(6);
+            if (raw === "[DONE]") break;
+            if (raw === "[DEGRADED_RERANKING]") {
               setDegraded(true);
               continue;
             }
-            accumulated += chunk;
+            // Chunks are JSON-encoded strings to preserve embedded newlines.
+            try {
+              accumulated += JSON.parse(raw);
+            } catch {
+              accumulated += raw;
+            }
             setResponse(accumulated);
           }
         }

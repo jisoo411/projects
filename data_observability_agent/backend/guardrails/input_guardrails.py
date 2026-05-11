@@ -51,24 +51,43 @@ def _redact_pii(text: str) -> str:
 
 
 async def _classify_topic(query: str) -> bool:
-    """Returns True if the query is on-topic (pipeline/data observability related)."""
-    resp = await _openai_client().chat.completions.create(
-        model="gpt-4o-mini",
-        temperature=0,
-        max_tokens=5,
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    "You are a topic classifier. Reply with exactly 'YES' if the user message "
-                    "is about data pipelines, Airflow DAGs, data quality, ETL processes, "
-                    "or data observability. Reply 'NO' for anything else."
-                ),
-            },
-            {"role": "user", "content": query},
-        ],
-    )
-    return resp.choices[0].message.content.strip().upper().startswith("YES")
+    """Returns True if the query is on-topic (pipeline/data observability related).
+
+    Fails open (allows) on any classifier error so a proxy hiccup never blocks
+    legitimate queries — injection detection already ran before this call.
+    """
+    try:
+        resp = await _openai_client().chat.completions.create(
+            model="gpt-4o-mini",
+            temperature=0,
+            max_tokens=5,
+            user="pipeline-observability-guardrails",
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a topic classifier. Reply with exactly 'YES' if the user message "
+                        "is about data pipelines, Airflow DAGs, data quality, ETL processes, "
+                        "or data observability. Reply 'NO' for anything else."
+                    ),
+                },
+                {"role": "user", "content": query},
+            ],
+        )
+    except Exception:
+        # Proxy / network error — allow the request through; injection check already passed.
+        return True
+
+    # Proxy may return plain text when content-type is not JSON; handle both paths.
+    if isinstance(resp, str):
+        content = resp.strip().upper()
+        # Only treat as a real classifier response if it starts with YES or NO.
+        # Anything else (proxy error message) → fail open.
+        if content.startswith("NO"):
+            return False
+        return True
+    content = resp.choices[0].message.content or ""
+    return content.strip().upper().startswith("YES")
 
 
 async def check_input(query: str) -> GuardrailResult:

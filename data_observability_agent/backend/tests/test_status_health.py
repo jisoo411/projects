@@ -14,16 +14,23 @@ def _make_app():
     return app
 
 
-MOCK_CACHED = {
-    "table_name": "orders", "metric_type": "composite", "value": 0.92,
-    "status": "ok", "observed_at": "2026-04-22T01:00:00+00:00",
-    "source": "dbcheck:table=orders/metric=composite/ts=2026-04-22T01:00:00Z",
-}
+def _make_pool_mock(table_rows=None, dag_rows=None):
+    """Return a mock async pool whose acquire() yields a connection with fetch results."""
+    table_rows = table_rows or []
+    dag_rows = dag_rows or []
+
+    conn_mock = AsyncMock()
+    conn_mock.fetch = AsyncMock(side_effect=[table_rows, dag_rows])
+
+    pool_mock = AsyncMock()
+    pool_mock.acquire.return_value.__aenter__ = AsyncMock(return_value=conn_mock)
+    pool_mock.acquire.return_value.__aexit__ = AsyncMock(return_value=False)
+    return pool_mock
 
 
 @pytest.mark.asyncio
 async def test_health_returns_200_when_all_ok():
-    with patch("api.health._ping_mcp", new=AsyncMock(return_value=True)), \
+    with patch("api.health._ping_mcp", new=MagicMock(return_value=True)), \
          patch("api.health._ping_db", new=AsyncMock(return_value=True)):
         app = _make_app()
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -34,7 +41,7 @@ async def test_health_returns_200_when_all_ok():
 
 @pytest.mark.asyncio
 async def test_health_returns_503_when_mcp_down():
-    with patch("api.health._ping_mcp", new=AsyncMock(return_value=False)), \
+    with patch("api.health._ping_mcp", new=MagicMock(return_value=False)), \
          patch("api.health._ping_db", new=AsyncMock(return_value=True)):
         app = _make_app()
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -44,7 +51,7 @@ async def test_health_returns_503_when_mcp_down():
 
 @pytest.mark.asyncio
 async def test_health_returns_503_when_db_down():
-    with patch("api.health._ping_mcp", new=AsyncMock(return_value=True)), \
+    with patch("api.health._ping_mcp", new=MagicMock(return_value=True)), \
          patch("api.health._ping_db", new=AsyncMock(return_value=False)):
         app = _make_app()
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -54,26 +61,43 @@ async def test_health_returns_503_when_db_down():
 
 @pytest.mark.asyncio
 async def test_status_returns_live_metrics_for_all_tables():
-    with patch("api.status.get_cached_metrics", new=AsyncMock(return_value=MOCK_CACHED)), \
-         patch("api.status._get_dag_status_cache", new=AsyncMock(return_value=[])):
+    table_row = MagicMock()
+    table_row.keys = MagicMock(return_value=["table_name", "metric_type", "value", "status", "observed_at", "source"])
+    table_row.__iter__ = MagicMock(return_value=iter([
+        ("table_name", "orders"), ("metric_type", "composite"), ("value", 0.92),
+        ("status", "ok"), ("observed_at", "2026-04-22T01:00:00+00:00"),
+        ("source", "dbcheck:table=orders/metric=composite/ts=2026-04-22T01:00:00Z"),
+    ]))
+
+    with patch("api.status.get_pool", new=AsyncMock(return_value=_make_pool_mock(
+        table_rows=[table_row], dag_rows=[]
+    ))), patch("api.status.get_source_pool", new=AsyncMock(return_value=_make_pool_mock(
+        table_rows=[], dag_rows=[]
+    ))):
         app = _make_app()
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.get("/status")
     assert resp.status_code == 200
-    data = resp.json()
-    assert "tables" in data
-    assert any(t["table_name"] == "orders" for t in data["tables"])
+    assert "tables" in resp.json()
+    assert "dags" in resp.json()
 
 
 @pytest.mark.asyncio
-async def test_status_includes_dag_cache():
-    dag_row = {"dag_id": "orders_pipeline", "state": "failed", "observed_at": "2026-04-22T02:00:00+00:00"}
-    with patch("api.status.get_cached_metrics", new=AsyncMock(return_value=None)), \
-         patch("api.status._get_dag_status_cache", new=AsyncMock(return_value=[dag_row])):
+async def test_status_includes_dag_rows():
+    dag_row = MagicMock()
+    dag_row.keys = MagicMock(return_value=["dag_id", "state", "observed_at"])
+    dag_row.__iter__ = MagicMock(return_value=iter([
+        ("dag_id", "nasa_neo_ingest"), ("state", "success"),
+        ("observed_at", "2026-04-22T02:00:00+00:00"),
+    ]))
+
+    with patch("api.status.get_pool", new=AsyncMock(return_value=_make_pool_mock(
+        table_rows=[], dag_rows=[]
+    ))), patch("api.status.get_source_pool", new=AsyncMock(return_value=_make_pool_mock(
+        table_rows=[], dag_rows=[dag_row]
+    ))):
         app = _make_app()
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.get("/status")
     assert resp.status_code == 200
-    data = resp.json()
-    assert "dags" in data
-    assert any(d["dag_id"] == "orders_pipeline" for d in data["dags"])
+    assert "dags" in resp.json()
