@@ -110,7 +110,14 @@ def get_task_log(
                 token=token,
             )
             content = resp.content
-            pages.append("\n".join(content) if isinstance(content, list) else (content or ""))
+            if isinstance(content, list):
+                parts = [
+                    item if isinstance(item, str) else getattr(item, "text", str(item))
+                    for item in content
+                ]
+                pages.append("\n".join(parts))
+            else:
+                pages.append(content or "")
             page_count += 1
             raw_token = getattr(resp, "next_token", None)
             token = raw_token if isinstance(raw_token, str) else None
