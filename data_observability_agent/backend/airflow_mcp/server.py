@@ -1,10 +1,16 @@
 import signal
+import sys
 
 import airflow_client.client as airflow_client
 from airflow_client.client.api import dag_api, dag_run_api, task_instance_api
 from mcp.server.fastmcp import FastMCP
 
 from config import settings
+
+
+def _log(*args):
+    """Write to stderr so output is visible in Render logs without corrupting stdio MCP transport."""
+    print(*args, file=sys.stderr)
 
 MAX_LOG_PAGES = settings.max_log_pages
 mcp = FastMCP("airflow-tools")
@@ -30,11 +36,10 @@ def _client():
         f"{settings.airflow_token[:12]}...{settings.airflow_token[-6:]}"
         if settings.airflow_token else "NOT SET"
     )
-    print(
+    _log(
         f"[airflow_mcp] _client() — base_url={base_url!r} "
         f"auth={auth_method} token={token_preview} "
         f"username={settings.airflow_username!r}",
-        flush=True,
     )
 
     cfg = airflow_client.Configuration(host=base_url)
@@ -56,15 +61,15 @@ def ping() -> dict:
 @mcp.tool()
 def get_dag_status(dag_id: str) -> dict:
     """Current DAG metadata and most recent run outcome."""
-    print(f"[airflow_mcp] get_dag_status(dag_id={dag_id!r})", flush=True)
+    _log(f"[airflow_mcp] get_dag_status(dag_id={dag_id!r})")
     try:
         with _client() as c:
             dag = dag_api.DAGApi(c).get_dag(dag_id)
-            print(f"[airflow_mcp] get_dag — response: {dag}", flush=True)
+            _log(f"[airflow_mcp] get_dag — response: {dag}")
             runs = dag_run_api.DagRunApi(c).get_dag_runs(
                 dag_id, limit=1, order_by="-logical_date"
             )
-            print(f"[airflow_mcp] get_dag_runs — response: {runs}", flush=True)
+            _log(f"[airflow_mcp] get_dag_runs — response: {runs}")
             last = runs.dag_runs[0] if runs.dag_runs else None
             return {
                 "dag_id": dag.dag_id,
@@ -76,20 +81,20 @@ def get_dag_status(dag_id: str) -> dict:
                 "last_run_end_date": str(last.end_date) if last else None,
             }
     except Exception as exc:
-        print(f"[airflow_mcp] get_dag_status ERROR: {type(exc).__name__}: {exc}", flush=True)
+        _log(f"[airflow_mcp] get_dag_status ERROR: {type(exc).__name__}: {exc}")
         raise
 
 
 @mcp.tool()
 def get_latest_dag_runs(dag_id: str, limit: int = 10) -> list[dict]:
     """Recent DAG run history with states and timing."""
-    print(f"[airflow_mcp] get_latest_dag_runs(dag_id={dag_id!r}, limit={limit})", flush=True)
+    _log(f"[airflow_mcp] get_latest_dag_runs(dag_id={dag_id!r}, limit={limit})")
     try:
         with _client() as c:
             runs = dag_run_api.DagRunApi(c).get_dag_runs(
                 dag_id, limit=limit, order_by="-logical_date"
             )
-            print(f"[airflow_mcp] get_dag_runs — response: {runs}", flush=True)
+            _log(f"[airflow_mcp] get_dag_runs — response: {runs}")
             return [
                 {
                     "dag_run_id": r.dag_run_id,
@@ -101,7 +106,7 @@ def get_latest_dag_runs(dag_id: str, limit: int = 10) -> list[dict]:
                 for r in runs.dag_runs
             ]
     except Exception as exc:
-        print(f"[airflow_mcp] get_latest_dag_runs ERROR: {type(exc).__name__}: {exc}", flush=True)
+        _log(f"[airflow_mcp] get_latest_dag_runs ERROR: {type(exc).__name__}: {exc}")
         raise
 
 
@@ -109,19 +114,18 @@ def get_latest_dag_runs(dag_id: str, limit: int = 10) -> list[dict]:
 def get_latest_task_try(dag_id: str, dag_run_id: str, task_id: str) -> int:
     """Returns the highest try_number for this task instance.
     Call this before get_task_log when the user asks about the 'latest attempt'."""
-    print(
+    _log(
         f"[airflow_mcp] get_latest_task_try(dag_id={dag_id!r}, "
         f"dag_run_id={dag_run_id!r}, task_id={task_id!r})",
-        flush=True,
     )
     try:
         with _client() as c:
             api = task_instance_api.TaskInstanceApi(c)
             ti = api.get_task_instance(dag_id=dag_id, dag_run_id=dag_run_id, task_id=task_id)
-            print(f"[airflow_mcp] get_task_instance — response: {ti}", flush=True)
+            _log(f"[airflow_mcp] get_task_instance — response: {ti}")
             return getattr(ti, "try_number", 1) or 1
     except Exception as exc:
-        print(f"[airflow_mcp] get_latest_task_try ERROR: {type(exc).__name__}: {exc}", flush=True)
+        _log(f"[airflow_mcp] get_latest_task_try ERROR: {type(exc).__name__}: {exc}")
         raise
 
 
@@ -131,10 +135,9 @@ def get_task_log(
 ) -> dict:
     """Paginated task-level logs. Handles Airflow 3 list[str] content.
     Returns {text, truncated, pages_returned}."""
-    print(
+    _log(
         f"[airflow_mcp] get_task_log(dag_id={dag_id!r}, dag_run_id={dag_run_id!r}, "
         f"task_id={task_id!r}, try={task_try_number})",
-        flush=True,
     )
     pages: list[str] = []
     token: str | None = None
@@ -151,11 +154,10 @@ def get_task_log(
                     full_content=True,
                     token=token,
                 )
-                print(
+                _log(
                     f"[airflow_mcp] get_log page {page_count + 1} — "
                     f"content_type={type(resp.content).__name__} "
-                    f"next_token={resp.next_token!r}",
-                    flush=True,
+                    f"next_token={resp.next_token!r}"
                 )
                 content = resp.content
                 pages.append("\n".join(content) if isinstance(content, list) else (content or ""))
@@ -164,7 +166,7 @@ def get_task_log(
                 if not token:
                     break
     except Exception as exc:
-        print(f"[airflow_mcp] get_task_log ERROR: {type(exc).__name__}: {exc}", flush=True)
+        _log(f"[airflow_mcp] get_task_log ERROR: {type(exc).__name__}: {exc}")
         raise
     return {
         "text": "\n".join(pages),
@@ -179,10 +181,9 @@ def _handle_sigterm(signum, frame):
 
 if __name__ == "__main__":
     signal.signal(signal.SIGTERM, _handle_sigterm)
-    print(
+    _log(
         f"[airflow_mcp] starting — airflow_base_url={settings.airflow_base_url!r} "
         f"token_set={bool(settings.airflow_token)} "
         f"username={settings.airflow_username!r}",
-        flush=True,
     )
     mcp.run()
