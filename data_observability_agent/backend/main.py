@@ -1,4 +1,5 @@
 import asyncio
+import os
 import sys
 from contextlib import asynccontextmanager
 
@@ -21,6 +22,7 @@ async def _start_mcp_subprocess() -> MultiServerMCPClient:
             "command": sys.executable,
             "args": ["-m", "airflow_mcp.server"],
             "transport": "stdio",
+            "env": dict(os.environ),  # explicitly forward Render env vars to the subprocess
         }
     })
 
