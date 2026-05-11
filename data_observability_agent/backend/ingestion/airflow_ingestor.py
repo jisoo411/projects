@@ -3,27 +3,39 @@ from rag.embedder import embed
 from rag.retriever import get_pool, get_source_pool
 
 
-async def ingest_airflow() -> None:
-    """Embed recent Airflow task log snippets into airflow_embeddings.
+async def ingest_airflow(full_backfill: bool = False) -> int:
+    """Embed Airflow task log snippets into airflow_embeddings.
 
-    Fetches task instances with log_text populated for runs in the last 2 hours.
-    Upserts (dag_id, dag_run_id, task_id, try_number) as the natural key.
+    full_backfill=False (default): only rows from the last 2 hours.
+    full_backfill=True: all rows — used by the one-time backfill endpoint.
+    Returns the number of rows processed.
     """
     source_pool = await get_source_pool()
     write_pool = await get_pool()
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=2)
 
     async with source_pool.acquire() as conn:
-        rows = await conn.fetch(
-            """
-            SELECT dag_id, dag_run_id, task_id, try_number, log_text, logical_date,
-                   destination_table
-            FROM airflow_task_logs
-            WHERE logical_date >= $1 AND log_text IS NOT NULL
-            ORDER BY logical_date DESC
-            """,
-            cutoff,
-        )
+        if full_backfill:
+            rows = await conn.fetch(
+                """
+                SELECT dag_id, dag_run_id, task_id, try_number, log_text, logical_date,
+                       destination_table
+                FROM airflow_task_logs
+                WHERE log_text IS NOT NULL
+                ORDER BY logical_date DESC
+                """
+            )
+        else:
+            cutoff = datetime.now(timezone.utc) - timedelta(hours=2)
+            rows = await conn.fetch(
+                """
+                SELECT dag_id, dag_run_id, task_id, try_number, log_text, logical_date,
+                       destination_table
+                FROM airflow_task_logs
+                WHERE logical_date >= $1 AND log_text IS NOT NULL
+                ORDER BY logical_date DESC
+                """,
+                cutoff,
+            )
 
     for row in rows:
         ts = row["logical_date"]
@@ -63,3 +75,4 @@ async def ingest_airflow() -> None:
                 """,
                 embedding_str, chunk_text, source_uri, row["dag_id"], destination_table,
             )
+    return len(rows)
