@@ -61,9 +61,11 @@ async def lifespan(app: FastAPI):
     _mcp_healthy = True
     _watchdog_task = asyncio.create_task(_watchdog_loop(_mcp_client))
 
+    from datetime import datetime, timezone
     scheduler = AsyncIOScheduler()
-    scheduler.add_job(ingest_airflow, "interval", minutes=15, id="airflow_ingestor")
-    scheduler.add_job(ingest_quality, "interval", minutes=15, id="quality_ingestor")
+    now = datetime.now(timezone.utc)
+    scheduler.add_job(ingest_airflow, "interval", minutes=15, id="airflow_ingestor", next_run_time=now)
+    scheduler.add_job(ingest_quality, "interval", minutes=15, id="quality_ingestor", next_run_time=now)
     scheduler.start()
 
     yield
