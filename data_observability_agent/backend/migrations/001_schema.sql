@@ -131,19 +131,6 @@ CREATE TABLE IF NOT EXISTS quality_metrics_history (
 CREATE INDEX IF NOT EXISTS qmh_lookup_idx
     ON quality_metrics_history (schema_name, table_name, metric_type, observed_at DESC);
 
--- ── dag_status_cache (Airflow fallback) ────────────────────────────────────
--- Populated during every ingestion cycle. Read by Workflow Sub-Agent when Airflow MCP is down.
-CREATE TABLE IF NOT EXISTS dag_status_cache (
-    dag_id            TEXT PRIMARY KEY,
-    is_paused         BOOLEAN,
-    schedule          TEXT,
-    last_run_id       TEXT,
-    last_run_state    TEXT,
-    last_run_date     TIMESTAMPTZ,
-    last_run_end_date TIMESTAMPTZ,
-    observed_at       TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
 -- ── audit_log (90-day retention) ────────────────────────────────────────────
 -- All chat queries logged. PII-redacted before insert.
 CREATE TABLE IF NOT EXISTS audit_log (

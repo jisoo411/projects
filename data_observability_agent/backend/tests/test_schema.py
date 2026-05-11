@@ -20,16 +20,16 @@ def test_pgcrypto_extension_installed():
     assert r is not None, "pgcrypto not installed — run migrations/001_schema.sql"
 
 
-def test_all_six_tables_exist():
+def test_all_core_tables_exist():
     expected = sorted([
         'airflow_embeddings', 'quality_embeddings', 'live_metrics',
-        'quality_metrics_history', 'dag_status_cache', 'audit_log',
+        'quality_metrics_history', 'audit_log',
     ])
     actual = asyncio.run(_q(
         "SELECT array_agg(table_name::text ORDER BY table_name) FROM information_schema.tables "
         "WHERE table_schema='public' AND table_name = ANY(ARRAY["
         "'airflow_embeddings','quality_embeddings','live_metrics',"
-        "'quality_metrics_history','dag_status_cache','audit_log'])"
+        "'quality_metrics_history','audit_log'])"
     ))
     assert sorted(actual) == expected, f"Missing tables: {set(expected) - set(actual)}"
 
