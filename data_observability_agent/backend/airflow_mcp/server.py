@@ -95,39 +95,51 @@ def get_task_log(
 ) -> dict:
     """Paginated task-level logs. Handles Airflow 3 list[str] content.
     Returns {text, truncated, pages_returned}."""
-    pages: list[str] = []
-    token: str | None = None
-    page_count = 0
-    with _client() as c:
-        api = task_instance_api.TaskInstanceApi(c)
-        for _ in range(MAX_LOG_PAGES):
-            resp = api.get_log(
-                dag_id=dag_id,
-                dag_run_id=dag_run_id,
-                task_id=task_id,
-                try_number=task_try_number,
-                full_content=True,
-                token=token,
-            )
-            content = resp.content
-            if isinstance(content, list):
-                parts = [
-                    item if isinstance(item, str) else getattr(item, "text", str(item))
-                    for item in content
-                ]
-                pages.append("\n".join(parts))
-            else:
-                pages.append(content or "")
-            page_count += 1
-            raw_token = getattr(resp, "next_token", None)
-            token = raw_token if isinstance(raw_token, str) else None
-            if not token:
-                break
-    return {
-        "text": "\n".join(pages),
-        "truncated": token is not None,
-        "pages_returned": page_count,
-    }
+    try:
+        pages: list[str] = []
+        token: str | None = None
+        page_count = 0
+        with _client() as c:
+            api = task_instance_api.TaskInstanceApi(c)
+            for _ in range(MAX_LOG_PAGES):
+                # Do not pass token=None — some client versions reject it
+                kwargs: dict = dict(
+                    dag_id=dag_id,
+                    dag_run_id=dag_run_id,
+                    task_id=task_id,
+                    try_number=task_try_number,
+                    full_content=True,
+                )
+                if token:
+                    kwargs["token"] = token
+                resp = api.get_log(**kwargs)
+                content = getattr(resp, "content", None)
+                if isinstance(content, list):
+                    # Airflow 3 returns Content objects, not plain strings
+                    parts = [
+                        item if isinstance(item, str)
+                        else str(getattr(item, "text", item))
+                        for item in content
+                    ]
+                    pages.append("\n".join(parts))
+                else:
+                    pages.append(str(content) if content else "")
+                page_count += 1
+                raw_token = getattr(resp, "next_token", None)
+                token = raw_token if isinstance(raw_token, str) else None
+                if not token:
+                    break
+        return {
+            "text": "\n".join(pages),
+            "truncated": token is not None,
+            "pages_returned": page_count,
+        }
+    except Exception as exc:
+        return {
+            "text": f"Log retrieval failed: {exc}",
+            "truncated": False,
+            "pages_returned": 0,
+        }
 
 
 def _handle_sigterm(signum, frame):
