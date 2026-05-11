@@ -80,7 +80,20 @@ def nasa_neo_ingest():
                 %s, %s,
                 %s, %s, %s
             )
-            ON CONFLICT (id, close_approach_date) DO NOTHING
+            ON CONFLICT (id, close_approach_date) DO UPDATE SET
+                neo_reference_id                  = EXCLUDED.neo_reference_id,
+                name                              = EXCLUDED.name,
+                nasa_jpl_url                      = EXCLUDED.nasa_jpl_url,
+                absolute_magnitude_h              = EXCLUDED.absolute_magnitude_h,
+                estimated_diameter_km_min         = EXCLUDED.estimated_diameter_km_min,
+                estimated_diameter_km_max         = EXCLUDED.estimated_diameter_km_max,
+                is_potentially_hazardous_asteroid = EXCLUDED.is_potentially_hazardous_asteroid,
+                is_sentry_object                  = EXCLUDED.is_sentry_object,
+                close_approach_date_full          = EXCLUDED.close_approach_date_full,
+                relative_velocity_km_per_s        = EXCLUDED.relative_velocity_km_per_s,
+                miss_distance_km                  = EXCLUDED.miss_distance_km,
+                orbiting_body                     = EXCLUDED.orbiting_body,
+                feed_date                         = EXCLUDED.feed_date
             """,
             rows,
         )

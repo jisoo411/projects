@@ -62,7 +62,13 @@ def nasa_apod_ingest():
             INSERT INTO nasa_apod
                 (date, url, title, explanation, hdurl, media_type, copyright, service_version)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (date, url) DO NOTHING
+            ON CONFLICT (date, url) DO UPDATE SET
+                title           = EXCLUDED.title,
+                explanation     = EXCLUDED.explanation,
+                hdurl           = EXCLUDED.hdurl,
+                media_type      = EXCLUDED.media_type,
+                copyright       = EXCLUDED.copyright,
+                service_version = EXCLUDED.service_version
             """,
             rows,
         )
