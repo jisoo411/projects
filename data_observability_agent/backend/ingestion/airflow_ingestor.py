@@ -45,6 +45,9 @@ async def ingest_airflow() -> None:
             f"Log:\n{row['log_text'][:2000]}"
         )
         embedding = await embed(chunk_text)
+        # asyncpg binds parameters before SQL-level casts are applied, so the
+        # vector must be passed as a formatted string for ::vector to work.
+        embedding_str = "[" + ",".join(str(x) for x in embedding) + "]"
 
         async with write_pool.acquire() as conn:
             await conn.execute(
@@ -55,5 +58,5 @@ async def ingest_airflow() -> None:
                 ON CONFLICT (source_uri) DO UPDATE
                     SET embedding=$1::vector, text=$2, is_deleted=false
                 """,
-                embedding, chunk_text, source_uri, row["dag_id"],
+                embedding_str, chunk_text, source_uri, row["dag_id"],
             )
