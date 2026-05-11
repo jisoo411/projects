@@ -14,7 +14,7 @@ def set_workflow_tools(tools: list) -> None:
     _workflow_tools = tools
 
 
-_KNOWN_DAG_IDS = ["orders_pipeline", "user_sync_dag", "inventory_load", "revenue_agg"]
+_KNOWN_DAG_IDS = ["nasa_neo_ingest", "nasa_apod_ingest"]
 
 
 def _extract_dag_id(query: str) -> str | None:
@@ -23,7 +23,9 @@ def _extract_dag_id(query: str) -> str | None:
     for dag_id in _KNOWN_DAG_IDS:
         if dag_id.lower() in q_lower:
             return dag_id
-    match = re.search(r"\b([a-z][a-z0-9_]+_(?:dag|pipeline|flow|job|sync|load|agg))\b", q_lower)
+    match = re.search(
+        r"\b([a-z][a-z0-9_]+_(?:dag|pipeline|flow|job|sync|load|agg|ingest))\b", q_lower
+    )
     return match.group(1) if match else None
 
 
