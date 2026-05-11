@@ -9,7 +9,7 @@ from agents.quality_agent import run_quality_agent
 from agents.workflow_agent import run_workflow_agent
 from config import settings
 
-AGENT_TIMEOUT_S: float = 30.0
+AGENT_TIMEOUT_S: float = 60.0
 
 
 class OrchestratorState(TypedDict):

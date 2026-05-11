@@ -16,7 +16,8 @@ async def ingest_airflow() -> None:
     async with source_pool.acquire() as conn:
         rows = await conn.fetch(
             """
-            SELECT dag_id, dag_run_id, task_id, try_number, log_text, logical_date
+            SELECT dag_id, dag_run_id, task_id, try_number, log_text, logical_date,
+                   destination_table
             FROM airflow_task_logs
             WHERE logical_date >= $1 AND log_text IS NOT NULL
             ORDER BY logical_date DESC
@@ -31,6 +32,7 @@ async def ingest_airflow() -> None:
         else:
             ts_str = str(ts)
 
+        destination_table = row["destination_table"]
         source_uri = (
             f"airflow:dag={row['dag_id']}"
             f"/task={row['task_id']}"
@@ -42,7 +44,8 @@ async def ingest_airflow() -> None:
             f"DAG: {row['dag_id']}\n"
             f"Task: {row['task_id']}\n"
             f"Run: {row['dag_run_id']} (try {row['try_number']})\n"
-            f"Log:\n{row['log_text'][:2000]}"
+            + (f"Destination table: {destination_table}\n" if destination_table else "")
+            + f"Log:\n{row['log_text'][:2000]}"
         )
         embedding = await embed(chunk_text)
         # asyncpg binds parameters before SQL-level casts are applied, so the
@@ -53,10 +56,10 @@ async def ingest_airflow() -> None:
             await conn.execute(
                 """
                 INSERT INTO airflow_embeddings
-                    (embedding, text, source_uri, dag_id, is_deleted)
-                VALUES ($1::vector, $2, $3, $4, false)
+                    (embedding, text, source_uri, dag_id, destination_table, is_deleted)
+                VALUES ($1::vector, $2, $3, $4, $5, false)
                 ON CONFLICT (source_uri) DO UPDATE
-                    SET embedding=$1::vector, text=$2, is_deleted=false
+                    SET embedding=$1::vector, text=$2, destination_table=$5, is_deleted=false
                 """,
-                embedding_str, chunk_text, source_uri, row["dag_id"],
+                embedding_str, chunk_text, source_uri, row["dag_id"], destination_table,
             )

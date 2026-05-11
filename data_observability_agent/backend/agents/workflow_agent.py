@@ -1,7 +1,10 @@
+import logging
 import re
 
 from langchain.agents import create_agent as _create_react_agent
 from langchain_openai import ChatOpenAI
+
+logger = logging.getLogger(__name__)
 
 from config import settings
 from rag.retriever import get_source_pool, retrieve
@@ -33,6 +36,7 @@ async def _resolve_dag_id_from_table(table_name: str) -> str | None:
             )
         return row["dag_id"] if row else None
     except Exception:
+        logger.exception("destination_table lookup failed for %r", table_name)
         return None
 
 
