@@ -4,7 +4,7 @@ from langchain.agents import create_agent as _create_react_agent
 from langchain_openai import ChatOpenAI
 
 from config import settings
-from rag.retriever import retrieve
+from rag.retriever import get_source_pool, retrieve
 
 _workflow_tools: list = []
 
@@ -17,12 +17,39 @@ def set_workflow_tools(tools: list) -> None:
 _KNOWN_DAG_IDS = ["nasa_neo_ingest", "nasa_apod_ingest"]
 
 
-def _extract_dag_id(query: str) -> str | None:
-    """Checks known DAG IDs first, then falls back to regex for snake_case DAG-like tokens."""
+async def _resolve_dag_id_from_table(table_name: str) -> str | None:
+    """Look up which DAG wrote to the given table via airflow_task_logs.destination_table."""
+    try:
+        pool = await get_source_pool()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT dag_id FROM airflow_task_logs
+                WHERE destination_table = $1
+                ORDER BY logical_date DESC
+                LIMIT 1
+                """,
+                table_name,
+            )
+        return row["dag_id"] if row else None
+    except Exception:
+        return None
+
+
+async def _extract_dag_id(query: str) -> str | None:
+    """Checks known DAG IDs first, then table-to-DAG mapping, then regex fallback."""
     q_lower = query.lower()
     for dag_id in _KNOWN_DAG_IDS:
         if dag_id.lower() in q_lower:
             return dag_id
+
+    # Extract candidate table names (snake_case tokens with at least one underscore)
+    table_candidates = re.findall(r"\b([a-z][a-z0-9]+(?:_[a-z0-9]+)+)\b", q_lower)
+    for candidate in table_candidates:
+        dag_id = await _resolve_dag_id_from_table(candidate)
+        if dag_id:
+            return dag_id
+
     match = re.search(
         r"\b([a-z][a-z0-9_]+_(?:dag|pipeline|flow|job|sync|load|agg|ingest))\b", q_lower
     )
@@ -60,7 +87,7 @@ class AgentExecutor:
 
 async def run_workflow_agent(query: str) -> tuple[str, bool]:
     """Run the workflow sub-agent. Returns (response_text, rerank_fallback)."""
-    dag_id = _extract_dag_id(query)
+    dag_id = await _extract_dag_id(query)
     chunks, rerank_fallback = await retrieve(
         query,
         table="airflow_embeddings",
