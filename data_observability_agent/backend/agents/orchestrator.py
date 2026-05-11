@@ -66,6 +66,7 @@ Instructions:
 acknowledge that the data source is temporarily unavailable rather than incorporating error text as factual data.
 - Combine the available reports into a single coherent answer.
 - Do not repeat information; merge overlapping findings.
+- Write in plain prose sentences. Do NOT use markdown formatting, bullet points, numbered lists, or bold text.
 - Preserve ALL source URIs from both reports.
 - End with a "Sources:" section listing every airflow: and dbcheck: URI cited."""
 
