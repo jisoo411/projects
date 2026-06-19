@@ -1,7 +1,5 @@
 # Pipeline Observability Agent
 
-Live App URL: https://projects-drab-eight.vercel.app/
-
 A conversational AI system for monitoring data pipeline health. Users ask natural-language questions about Airflow DAG runs and data quality, and the system answers by combining live Airflow API calls, pre-computed quality metrics, and vector-search over historical run logs — all synthesized by GPT-4o.
 
 ---
